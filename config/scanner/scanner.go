@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	//go:embed detection.rego
+	// FIXME: we don't support go embeds yet //go:embed detection.rego
 	defaultDetectionModule string
 )
 
