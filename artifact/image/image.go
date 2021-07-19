@@ -41,7 +41,7 @@ func NewArtifact(img image.Image, c cache.ArtifactCache, disabled []analyzer.Typ
 		return nil, xerrors.Errorf("config scanner error: %w", err)
 	}
 
-	s, err := scanner.New(opt.Namespaces, opt.PolicyPaths, opt.DataPaths)
+	s, err := scanner.New("", opt.Namespaces, opt.PolicyPaths, opt.DataPaths, opt.Trace)
 	if err != nil {
 		return nil, xerrors.Errorf("scanner error: %w", err)
 	}
@@ -97,6 +97,7 @@ func (a Artifact) Inspect(ctx context.Context) (types.ArtifactReference, error) 
 
 	return types.ArtifactReference{
 		Name:        a.image.Name(),
+		Type:        types.ArtifactContainerImage,
 		ID:          imageKey,
 		BlobIDs:     layerKeys,
 		RepoTags:    a.image.RepoTags(),
@@ -185,7 +186,7 @@ func (a Artifact) inspectLayer(ctx context.Context, diffID string) (types.BlobIn
 	limit := semaphore.NewWeighted(parallel)
 
 	opqDirs, whFiles, err := walker.WalkLayerTar(cr, func(filePath string, info os.FileInfo, opener analyzer.Opener) error {
-		if err = a.analyzer.AnalyzeFile(ctx, &wg, limit, result, filePath, info, opener); err != nil {
+		if err = a.analyzer.AnalyzeFile(ctx, &wg, limit, result, "", filePath, info, opener); err != nil {
 			return xerrors.Errorf("failed to analyze %s: %w", filePath, err)
 		}
 		return nil
@@ -200,23 +201,18 @@ func (a Artifact) inspectLayer(ctx context.Context, diffID string) (types.BlobIn
 	// Sort the analysis result for consistent results
 	result.Sort()
 
-	// Scan config files
-	misconfs, err := a.scanner.ScanConfigs(ctx, result.Configs)
-	if err != nil {
-		return types.BlobInfo{}, xerrors.Errorf("config scan error: %w", err)
-	}
+	// TODO Scan config files
 
 	layerInfo := types.BlobInfo{
-		SchemaVersion:     types.BlobJSONSchemaVersion,
-		Digest:            layerDigest,
-		DiffID:            diffID,
-		OS:                result.OS,
-		PackageInfos:      result.PackageInfos,
-		Applications:      result.Applications,
-		Misconfigurations: misconfs,
-		OpaqueDirs:        opqDirs,
-		WhiteoutFiles:     whFiles,
-		Size:              cr.Size(),
+		SchemaVersion: types.BlobJSONSchemaVersion,
+		Digest:        layerDigest,
+		DiffID:        diffID,
+		OS:            result.OS,
+		PackageInfos:  result.PackageInfos,
+		Applications:  result.Applications,
+		OpaqueDirs:    opqDirs,
+		WhiteoutFiles: whFiles,
+		Size:          cr.Size(),
 	}
 	return layerInfo, nil
 }
